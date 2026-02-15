@@ -40,7 +40,6 @@ st.markdown("""
 
 # --- HELPER: KALENDER DATEI ERSTELLEN ---
 def create_ics(event_title, description):
-    # Setzt den Termin pauschal auf "Morgen 09:00 Uhr" als Erinnerung
     tomorrow = datetime.datetime.now() + timedelta(days=1)
     start_time = tomorrow.replace(hour=9, minute=0, second=0).strftime('%Y%m%dT%H%M%S')
     end_time = tomorrow.replace(hour=10, minute=0, second=0).strftime('%Y%m%dT%H%M%S')
@@ -54,7 +53,7 @@ DTSTAMP:{datetime.datetime.now().strftime('%Y%m%dT%H%M%S')}
 DTSTART:{start_time}
 DTEND:{end_time}
 SUMMARY:⚡ Markt-Check: {event_title}
-DESCRIPTION:{description} - Überprüfe die Charts!
+DESCRIPTION:{description}
 BEGIN:VALARM
 TRIGGER:-PT15M
 ACTION:DISPLAY
@@ -64,7 +63,7 @@ END:VEVENT
 END:VCALENDAR"""
     return ics_content
 
-# --- 1. DATEN HOLEN (Future Scanner) ---
+# --- 1. DATEN HOLEN ---
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_calendar_data():
     urls = [
@@ -75,7 +74,6 @@ def fetch_calendar_data():
     
     events = []
     high_impact_keywords = ["cpi", "nfp", "gdp", "fomc", "rate decision", "interest rate", "inflation"]
-    # Wörter, die auf ZUKUNFT hindeuten
     future_keywords = ["preview", "outlook", "forecast", "tomorrow", "week ahead", "due", "expects"]
     
     for url in urls:
@@ -86,25 +84,20 @@ def fetch_calendar_data():
                 link = e.link
                 lower = title.lower()
                 
-                # Impact
                 impact = "low"
                 for k in high_impact_keywords:
                     if k in lower: impact = "high"
                 
-                # Ist es eine Zukunfts-Prognose?
                 is_future = False
                 for k in future_keywords:
                     if k in lower: is_future = True
                 
-                # Signal bestimmen
                 signal_score = 0
                 signal_text = "News"
                 
-                # Bullish
                 if "beat" in lower or "above" in lower or "stronger" in lower or "hike" in lower or "bullish" in lower:
                     signal_score = 1
                     signal_text = "Bullish"
-                # Bearish
                 elif "miss" in lower or "below" in lower or "weaker" in lower or "cut" in lower or "bearish" in lower:
                     signal_score = -1
                     signal_text = "Bearish"
@@ -130,10 +123,11 @@ def analyze_pair(name, events):
     if "XAU" in name: base = "gold"
     if "US30" in name: base = "dow"
     if "BTC" in name: base = "bitcoin"
+    if "ADA" in name: base = "cardano"
     
     score = 0
     relevant_news = []
-    future_warning = None # Speichert Warnung für morgen
+    future_warning = None
     
     for e in events:
         is_relevant = False
@@ -141,11 +135,9 @@ def analyze_pair(name, events):
             is_relevant = True
         
         if is_relevant:
-            # Score Berechnung (nur aktuelle/harte Fakten zählen voll)
             if not e["is_future"]:
                 score += e["score"]
             
-            # Wenn es eine Zukunfts-News ist (Preview/Tomorrow), speichern wir sie als Warnung
             if e["is_future"] and e["impact"] == "high":
                 future_warning = e
                 
@@ -180,13 +172,23 @@ st.caption(f"Scannt nach Signalen für Heute & Morgen ({datetime.datetime.now().
 
 cached_data = fetch_calendar_data()
 
+# HIER SIND JETZT ALLE 14 PAARE SICHER FORMATIERT
 pairs = [
-    ("USD/JPY", "USDJPY=X"), ("EUR/USD", "EURUSD=X"), ("GBP/USD", "GBPUSD=X"),
-    ("XAU/USD", "GC=F"), ("US30", "^DJI"), ("BTC/USD", "BTC-USD"),
-    ("EUR/JPY", "EURJPY=X"), ("GBP/JPY", "GBPJPY=X")
+    ("USD/JPY", "USDJPY=X"),
+    ("CHF/JPY", "CHFJPY=X"),
+    ("EUR/JPY", "EURJPY=X"),
+    ("EUR/GBP", "EURGBP=X"),
+    ("GBP/JPY", "GBPJPY=X"),
+    ("USD/CAD", "USDCAD=X"),
+    ("US30", "^DJI"),
+    ("XAU/USD", "GC=F"),
+    ("EUR/USD", "EURUSD=X"),
+    ("GBP/CAD", "GBPCAD=X"),
+    ("EUR/CHF", "EURCHF=X"),
+    ("USD/CHF", "USDCHF=X"),
+    ("BTC/USD", "BTC-USD"),
+    ("ADA/USDT", "ADA-USD")
 ]
-
-st.subheader("🔮 KI-Prognose & Kalender-Automation")
 
 # Grid Layout
 for i in range(0, len(pairs), 4):
@@ -198,9 +200,8 @@ for i in range(0, len(pairs), 4):
             st.markdown(f"<div class='pair-name'>{name}</div>", unsafe_allow_html=True)
             st.markdown(f"<div class='signal-box' style='background-color: {color};'>{decision}</div>", unsafe_allow_html=True)
             
-            # --- FEATURE: ZUKUNFTS-WARNUNG ---
+            # ZUKUNFTS-WARNUNG & KALENDER
             if future_alert:
-                # Zeigt eine gelbe Box, wenn es News für "Morgen/Preview" gibt
                 st.markdown(f"""
                 <div class='future-warning'>
                     ⚠️ <b>Vorschau/Morgen:</b><br>
@@ -208,9 +209,7 @@ for i in range(0, len(pairs), 4):
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # --- FEATURE: KALENDER BUTTON ---
-                # Generiert die .ics Datei für diesen spezifischen Event
-                ics_data = create_ics(f"{name}: {future_alert['title']}", f"Prognose war: {future_alert['signal_text']}. Link: {future_alert['link']}")
+                ics_data = create_ics(f"{name}: {future_alert['title']}", f"Link: {future_alert['link']}")
                 st.download_button(
                     label="📅 Zu Kalender",
                     data=ics_data,
