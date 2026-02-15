@@ -7,10 +7,10 @@ import time
 import socket
 import streamlit.components.v1 as components
 
-# 1. Konfiguration (Muss ganz oben stehen)
+# 1. Konfiguration
 st.set_page_config(page_title="Trading ATM Future", layout="wide")
 
-# CSS: Styling
+# CSS: Design Anpassung (Genau wie dein Screenshot)
 st.markdown("""
 <style>
     .stApp { background-color: #0e1117; }
@@ -21,44 +21,63 @@ st.markdown("""
         border: 1px solid #2a2e39;
         margin-bottom: 10px;
     }
+    
+    /* SIGNAL BOX (Kaufen/Verkaufen) */
     .signal-box { 
         font-size: 1.1em; font-weight: 800; text-align: center; 
-        padding: 8px; border-radius: 4px; margin-top: 5px;
+        padding: 8px; border-radius: 4px; margin-top: 5px; margin-bottom: 10px;
         color: #000; text-shadow: 0px 0px 1px rgba(255,255,255,0.5);
     }
+    
+    /* --- NEU: DIE GOLDENE WARN-BOX (Wie im Screenshot) --- */
     .future-warning {
-        border: 1px solid #ffd700; background-color: #332b00; color: #ffd700;
-        padding: 8px; border-radius: 4px; font-size: 0.85em; margin-top: 8px; text-align: center; line-height: 1.4;
+        border: 2px solid #ffd700;       /* Goldener Rand */
+        background-color: #332b00;       /* Dunkler, gelblicher Hintergrund */
+        color: #ffd700;                  /* Goldene Schrift */
+        padding: 10px; 
+        border-radius: 6px; 
+        font-size: 0.9em; 
+        margin-top: 5px; 
+        margin-bottom: 10px;
+        text-align: center; 
+        font-weight: bold;
+        line-height: 1.4;
+        box-shadow: 0 0 10px rgba(255, 215, 0, 0.1); /* Leichtes Leuchten */
     }
+    
+    .warning-header {
+        text-transform: uppercase;
+        font-size: 0.85em;
+        margin-bottom: 4px;
+        opacity: 0.9;
+    }
+    
+    /* News Styles */
     .ff-high { border-left: 4px solid #ff4b4b; padding-left: 8px; margin-bottom: 6px; font-size: 0.85em; }
     .ff-med { border-left: 4px solid #ffa500; padding-left: 8px; margin-bottom: 6px; font-size: 0.85em; }
     .ff-low { border-left: 4px solid #4caf50; padding-left: 8px; margin-bottom: 6px; font-size: 0.85em; color: #aaa; }
     
     .pair-name { color: #d1d4dc; font-weight: bold; font-size: 1em; text-align: center; }
     a { color: #2962ff !important; text-decoration: none; }
-    a:hover { text-decoration: underline; color: #5e8aff !important; }
+    
     .last-update { font-size: 0.7em; color: #787b86; text-align: center; margin-top: 30px; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- HELPER: SYNONYME FINDEN (Das Gehirn für mehr Treffer) ---
+# --- HELPER: SYNONYME (Damit wir alles finden) ---
 def get_keywords_for_currency(symbol):
     symbol = symbol.upper()
-    keywords = [symbol] # Standard: USD
-    
-    # Erweiterte Begriffsliste für mehr News-Treffer
-    if symbol == "USD": keywords.extend(["dollar", "greenback", "fed ", "fomc", "powell", "treasury", "us economy"])
-    if symbol == "EUR": keywords.extend(["euro", "ecb", "lagarde", "ez ", "german", "bundesbank"])
-    if symbol == "GBP": keywords.extend(["pound", "sterling", "boe ", "bailey", "uk economy", "gilt"])
+    keywords = [symbol]
+    if symbol == "USD": keywords.extend(["dollar", "greenback", "fed ", "fomc", "powell", "treasury"])
+    if symbol == "EUR": keywords.extend(["euro", "ecb", "lagarde", "ez ", "german"])
+    if symbol == "GBP": keywords.extend(["pound", "sterling", "boe ", "bailey", "uk economy"])
     if symbol == "JPY": keywords.extend(["yen", "boj ", "ueda", "japan"])
     if symbol == "CHF": keywords.extend(["franc", "snb ", "swiss"])
-    if symbol == "CAD": keywords.extend(["loonie", "boc ", "canada", "oil"]) # Öl ist wichtig für CAD
+    if symbol == "CAD": keywords.extend(["loonie", "boc ", "canada", "oil"])
     if symbol == "AUD": keywords.extend(["aussie", "rba ", "australia"])
-    if symbol == "NZD": keywords.extend(["kiwi", "rbnz", "zealand"])
     if symbol == "BTC": keywords.extend(["bitcoin", "crypto", "sec "])
     if symbol == "XAU": keywords.extend(["gold", "bullion", "metal"])
     if symbol == "US30": keywords.extend(["dow", "wall street", "stocks", "sp500"])
-    
     return keywords
 
 # --- HELPER: KALENDER DATEI ---
@@ -75,7 +94,7 @@ UID:{int(time.time())}@tradingatm.app
 DTSTAMP:{datetime.datetime.now().strftime('%Y%m%dT%H%M%S')}
 DTSTART:{start_time}
 DTEND:{end_time}
-SUMMARY:⚡ Markt-Check: {event_title}
+SUMMARY:⚡ Markt-Vorschau: {event_title}
 DESCRIPTION:{description}
 BEGIN:VALARM
 TRIGGER:-PT15M
@@ -96,15 +115,14 @@ def fetch_calendar_data():
     ]
     
     events = []
-    # Trigger-Wörter
-    high_impact_keywords = ["cpi", "nfp", "gdp", "fomc", "rate decision", "interest rate", "inflation", "payroll"]
-    future_keywords = ["preview", "outlook", "forecast", "tomorrow", "week ahead", "due", "expects", "projection", "likely"]
+    # Wörter die auf MORGEN/ZUKUNFT hindeuten
+    future_keywords = ["preview", "outlook", "forecast", "tomorrow", "week ahead", "projection", "expects", "likely to"]
+    high_impact_keywords = ["cpi", "nfp", "gdp", "fomc", "rate decision", "interest rate", "inflation"]
     
     for url in urls:
         try:
             f = feedparser.parse(url)
-            # WICHTIG: Limit erhöht auf 50, um mehr News zu fangen
-            for e in f.entries[:50]:
+            for e in f.entries[:50]: # 50 News pro Feed scannen
                 title = e.title
                 link = e.link
                 lower = title.lower()
@@ -113,33 +131,30 @@ def fetch_calendar_data():
                 for k in high_impact_keywords:
                     if k in lower: impact = "high"
                 
+                # Check: Ist es eine Prognose für die Zukunft?
                 is_future = False
                 for k in future_keywords:
                     if k in lower: is_future = True
                 
+                # Signal Bestimmung
                 signal_score = 0
-                signal_text = "News"
-                
-                if "beat" in lower or "above" in lower or "stronger" in lower or "hike" in lower or "bullish" in lower or "jump" in lower:
+                if "beat" in lower or "above" in lower or "stronger" in lower or "hike" in lower or "bullish" in lower:
                     signal_score = 1
-                    signal_text = "Bullish"
-                elif "miss" in lower or "below" in lower or "weaker" in lower or "cut" in lower or "bearish" in lower or "drop" in lower:
+                elif "miss" in lower or "below" in lower or "weaker" in lower or "cut" in lower or "bearish" in lower:
                     signal_score = -1
-                    signal_text = "Bearish"
                 
                 events.append({
                     "title": title,
                     "link": link,
                     "impact": impact,
                     "score": signal_score,
-                    "signal_text": signal_text,
                     "is_future": is_future,
                     "raw": lower
                 })
         except: continue
     return events
 
-# --- 2. ANALYSE PRO PAAR (Jetzt mit Synonym-Suche) ---
+# --- 2. ANALYSE PRO PAAR ---
 def analyze_pair(name, events):
     parts = name.replace(' (Gold)', '').split('/')
     base_sym = parts[0]
@@ -149,7 +164,6 @@ def analyze_pair(name, events):
     if "US30" in name: base_sym = "US30"
     if "BTC" in name: base_sym = "BTC"
     
-    # Hole Synonyme (z.B. CAD -> Loonie, Oil, Canada)
     base_keywords = get_keywords_for_currency(base_sym)
     quote_keywords = get_keywords_for_currency(quote_sym) if quote_sym else []
     
@@ -159,136 +173,15 @@ def analyze_pair(name, events):
     
     for e in events:
         is_relevant = False
-        
-        # Prüfe Base Währung (z.B. EUR)
         for k in base_keywords:
             if k in e["raw"]: is_relevant = True
-            
-        # Prüfe Quote Währung (z.B. USD)
         for k in quote_keywords:
             if k in e["raw"]: is_relevant = True
-            
-        if "market" in e["raw"]: is_relevant = True # Globale News
+        if "market" in e["raw"]: is_relevant = True
         
         if is_relevant:
+            # Score Berechnung (nur aktuelle Fakten zählen sofort)
             if not e["is_future"]:
                 score += e["score"]
             
-            # Priorisiere Future Warnings
-            if e["is_future"] and (e["impact"] == "high" or "outlook" in e["raw"]):
-                future_warning = e
-                
-            relevant_news.append(e)
-            
-    decision = "NEUTRAL"
-    color = "#b2b5be"
-    
-    if score >= 1:
-        decision = "KAUFEN"
-        color = "#00ff00"
-    elif score <= -1:
-        decision = "VERKAUFEN"
-        color = "#ff4b4b"
-        
-    return decision, color, relevant_news, future_warning
-
-# --- 3. IP ---
-try:
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.connect(("8.8.8.8", 80))
-    local_ip = s.getsockname()[0]
-    s.close()
-    network_url = f"http://{local_ip}:8501"
-except: network_url = "http://localhost:8501"
-
-
-# --- 4. LAYOUT ---
-st.title("📅 Future Market Scanner")
-st.caption(f"Scannt nach Signalen für Heute & Morgen ({datetime.datetime.now().strftime('%d.%m.%Y')})")
-
-cached_data = fetch_calendar_data()
-
-pairs = [
-    ("USD/JPY", "USDJPY=X"),
-    ("CHF/JPY", "CHFJPY=X"),
-    ("EUR/JPY", "EURJPY=X"),
-    ("EUR/GBP", "EURGBP=X"),
-    ("GBP/JPY", "GBPJPY=X"),
-    ("USD/CAD", "USDCAD=X"),
-    ("US30", "^DJI"),
-    ("XAU/USD", "GC=F"),
-    ("EUR/USD", "EURUSD=X"),
-    ("GBP/CAD", "GBPCAD=X"),
-    ("EUR/CHF", "EURCHF=X"),
-    ("USD/CHF", "USDCHF=X"),
-    ("BTC/USD", "BTC-USD"),
-    ("ADA/USDT", "ADA-USD")
-]
-
-# Grid Layout
-for i in range(0, len(pairs), 4):
-    cols = st.columns(4)
-    for j, (name, ticker) in enumerate(pairs[i:i+4]):
-        decision, color, news, future_alert = analyze_pair(name, cached_data)
-        
-        with cols[j]:
-            st.markdown(f"<div class='pair-name'>{name}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='signal-box' style='background-color: {color};'>{decision}</div>", unsafe_allow_html=True)
-            
-            # 1. ZUKUNFTS-WARNUNG (Ganz oben, Gelb)
-            if future_alert:
-                st.markdown(f"""
-                <div class='future-warning'>
-                    ⚠️ <b>Vorschau/Morgen:</b><br>
-                    {future_alert['title']}
-                </div>
-                """, unsafe_allow_html=True)
-                
-                ics_data = create_ics(f"{name}: {future_alert['title']}", f"Link: {future_alert['link']}")
-                st.download_button(
-                    label="📅 Termin speichern",
-                    data=ics_data,
-                    file_name=f"event_{name}.ics",
-                    mime="text/calendar",
-                    key=f"btn_{i}_{j}",
-                    help="Speichert diesen Event in deinen Outlook/Google Kalender"
-                )
-
-            # 2. LISTE ALLER WICHTIGEN NEWS (Darunter)
-            # Wir zeigen jetzt bis zu 5 relevante News an, nicht nur 3
-            with st.expander(f"Relevante News ({len(news)})", expanded=True): # expanded=True öffnet es direkt
-                if news:
-                    # Sortieren: Erst High Impact, dann Future, dann Rest
-                    news.sort(key=lambda x: (x["impact"] == "high", x["is_future"]), reverse=True)
-                    
-                    for n in news[:5]: # Zeige Top 5
-                        tag = ""
-                        if n["is_future"]: tag = "🔮 "
-                        elif n["impact"] == "high": tag = "🔥 "
-                        
-                        css = "ff-med"
-                        if n["impact"] == "high": css = "ff-high"
-                        elif n["score"] == 0 and not n["is_future"]: css = "ff-low"
-                        
-                        st.markdown(f"<div class='{css}'>{tag}<a href='{n['link']}'>{n['title']}</a></div>", unsafe_allow_html=True)
-                else:
-                    st.caption("Keine spezifischen News.")
-
-st.divider()
-st.subheader("📊 Offizieller Kalender")
-components.html("""
-<div class="tradingview-widget-container">
-  <div class="tradingview-widget-container__widget"></div>
-  <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-events.js" async>
-  { "colorTheme": "dark", "isTransparent": false, "width": "100%", "height": "600", "locale": "de_DE", "importanceFilter": "-1,0,1" }
-  </script>
-</div>
-""", height=600)
-
-with st.sidebar:
-    st.header("📱 App Link")
-    st.image(f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={network_url}")
-    st.write(f"`{network_url}`")
-
-time.sleep(180) 
-st.rerun()
+            #
