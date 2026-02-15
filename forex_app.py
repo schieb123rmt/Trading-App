@@ -7,125 +7,143 @@ import socket
 import streamlit.components.v1 as components
 
 # 1. Konfiguration
-st.set_page_config(page_title="TradingView Calendar Master", layout="wide")
+st.set_page_config(page_title="TV Calendar Ultimate", layout="wide")
 
-# CSS: TradingView & Forex Factory Style
+# CSS: TradingView Dark Mode & Forex Factory Farben
 st.markdown("""
 <style>
+    /* Hintergrund & Container */
+    .stApp { background-color: #0e1117; }
     div[data-testid="column"] {
-        background-color: #131722; /* TradingView Dark Background */
+        background-color: #1e222d; /* TradingView Box Farbe */
         border-radius: 8px;
         padding: 10px;
-        border: 1px solid #363c4e;
+        border: 1px solid #2a2e39;
+        margin-bottom: 10px;
     }
-    .main-header { font-size: 1.5em; font-weight: bold; color: #d1d4dc; margin-bottom: 10px; }
+    
+    /* Signal Boxen */
     .signal-box { 
-        font-size: 1.2em; 
-        font-weight: 900; 
+        font-size: 1.1em; 
+        font-weight: 800; 
         text-align: center; 
-        padding: 10px; 
+        padding: 8px; 
         border-radius: 4px; 
         margin-top: 5px;
-        color: black;
+        color: #000;
+        text-shadow: 0px 0px 1px rgba(255,255,255,0.5);
     }
-    .ff-impact-high { border-left: 5px solid #ff4b4b; padding-left: 10px; margin-bottom: 5px; } /* Forex Factory Rot */
-    .ff-impact-med { border-left: 5px solid #ffa500; padding-left: 10px; margin-bottom: 5px; } /* Forex Factory Orange */
     
-    /* Angepasste Links */
-    a { color: #2962ff !important; text-decoration: none; font-size: 0.8em; }
+    /* Forex Factory Impact Styles für die News-Liste */
+    .ff-high { border-left: 4px solid #ff4b4b; padding-left: 8px; margin-bottom: 4px; font-size: 0.85em; }
+    .ff-med { border-left: 4px solid #ffa500; padding-left: 8px; margin-bottom: 4px; font-size: 0.85em; }
+    .ff-low { border-left: 4px solid #f0e68c; padding-left: 8px; margin-bottom: 4px; font-size: 0.85em; }
     
-    .last-update { font-size: 0.7em; color: #787b86; text-align: center; margin-top: 20px; }
+    .pair-name { color: #d1d4dc; font-weight: bold; font-size: 1em; text-align: center; }
+    
+    /* Links */
+    a { color: #2962ff !important; text-decoration: none; }
+    
+    .last-update { font-size: 0.7em; color: #787b86; text-align: center; margin-top: 30px; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 1. DAS GEHIRN: FOREX FACTORY LOGIK ---
-@st.cache_data(ttl=120, show_spinner=False) # Alle 2 Min Update
-def fetch_calendar_news():
-    # Wir nutzen Investing.com Kalender-Feed, da er ForexFactory am ähnlichsten ist
-    # und maschinell lesbar ist (im Gegensatz zum TradingView Widget)
+# --- 1. DATEN HOLEN (Forex Factory Logik via Investing.com RSS) ---
+@st.cache_data(ttl=180, show_spinner=False)
+def fetch_calendar_data():
+    # Wir nutzen Feeds, die über Forecasts berichten
     urls = [
-        "https://www.investing.com/rss/news_25.rss", # Wirtschaftskalender News
-        "https://www.fxstreet.com/rss/news"
+        "https://www.investing.com/rss/news_25.rss", # Wirtschaftskalender Events
+        "https://www.investing.com/rss/forex_news.rss",
+        "https://www.fxstreet.com/rss/news",
+        "https://cointelegraph.com/rss"
     ]
     
-    all_events = []
+    events = []
     
-    # Schlüsselwörter für TradingView/ForexFactory Events
-    high_impact = ["cpi", "nfp", "gdp", "rate decision", "fomc", "interest rate", "unemployment"]
+    # Schlüsselwörter für Forex Factory Impact
+    high_impact_keywords = ["cpi", "nfp", "gdp", "fomc", "rate decision", "interest rate", "payroll", "inflation"]
     
     for url in urls:
         try:
             f = feedparser.parse(url)
-            for e in f.entries[:20]:
+            for e in f.entries[:25]:
                 title = e.title
                 link = e.link
-                lower_title = title.lower()
+                lower = title.lower()
                 
-                # Impact Bestimmung (Forex Factory Style)
-                impact = "Low"
-                score = 0
+                # 1. Impact bestimmen
+                impact = "low"
+                for k in high_impact_keywords:
+                    if k in lower: impact = "high"
                 
-                # Check High Impact
-                for k in high_impact:
-                    if k in lower_title: 
-                        impact = "High"
-                        
-                # Check Prognose vs. Aktuell (Das ist die TradingView Spalte "Forecast")
-                # Wenn wir Wörter wie "beats", "above", "misses" finden, wissen wir das Ergebnis
-                signal = "Neutral"
+                # 2. Signal bestimmen (Forecast vs Actual)
+                signal_score = 0
+                signal_text = "News"
                 
-                if "beat" in lower_title or "above forecast" in lower_title or "stronger" in lower_title:
-                    signal = "Bullish (Besser als Prognose)"
-                    score = 1
-                elif "miss" in lower_title or "below forecast" in lower_title or "weaker" in lower_title:
-                    signal = "Bearish (Schlechter als Prognose)"
-                    score = -1
-                elif "hike" in lower_title:
-                    signal = "Rate Hike (Zinserhöhung)"
-                    score = 1
-                elif "cut" in lower_title:
-                    signal = "Rate Cut (Zinssenkung)"
-                    score = -1
-                    
-                all_events.append({
+                # Bullish Wörter (Besser als erwartet / Hike)
+                if "beat" in lower or "above forecast" in lower or "stronger" in lower or "hike" in lower or "jump" in lower:
+                    signal_score = 1
+                    signal_text = "Bullish (Strong Data)"
+                
+                # Bearish Wörter (Schlechter als erwartet / Cut)
+                elif "miss" in lower or "below forecast" in lower or "weaker" in lower or "cut" in lower or "drop" in lower:
+                    signal_score = -1
+                    signal_text = "Bearish (Weak Data)"
+                
+                events.append({
                     "title": title,
                     "link": link,
                     "impact": impact,
-                    "signal": signal,
-                    "score": score,
-                    "raw": lower_title
+                    "score": signal_score,
+                    "signal_text": signal_text,
+                    "raw": lower
                 })
         except: continue
-        
-    return all_events
+    return events
 
-def analyze_pair_logic(name, events):
-    # Filtert die globalen Events passend zum Währungspaar
-    search_term = name.split('/')[0].lower() # z.B. "usd" bei "USD/JPY"
-    if "XAU" in name: search_term = "gold"
-    if "US30" in name: search_term = "dow"
+# --- 2. ANALYSE PRO PAAR ---
+def analyze_pair(name, events):
+    # Währung aufsplitten (z.B. EUR/USD -> sucht nach EUR und USD News)
+    parts = name.replace(' (Gold)', '').split('/')
+    base = parts[0].lower() # eur
+    quote = parts[1].lower() if len(parts) > 1 else "" # usd
     
-    pair_score = 0
+    if "XAU" in name: base = "gold"
+    if "US30" in name: base = "dow"
+    if "BTC" in name: base = "bitcoin"
+    if "ADA" in name: base = "cardano"
+    
+    score = 0
     relevant_news = []
     
-    for event in events:
-        # Relevanz prüfen
+    for e in events:
         is_relevant = False
-        if search_term in event["raw"]: is_relevant = True
-        if "market" in event["raw"]: is_relevant = True # Global
-        if "dollar" in event["raw"] and "usd" in search_term: is_relevant = True
+        # Ist die News für eine der beiden Währungen relevant?
+        if base in e["raw"]: is_relevant = True
+        if quote in e["raw"]: is_relevant = True
+        if "market" in e["raw"]: is_relevant = True # Globale News
         
         if is_relevant:
-            pair_score += event["score"]
-            relevant_news.append(event)
+            score += e["score"]
+            # Nur relevante News anzeigen
+            if e["score"] != 0 or e["impact"] == "high":
+                relevant_news.append(e)
             
-    # Ergebnis
-    if pair_score > 0: return "KAUFEN (Daten stark)", "#00ff00", relevant_news
-    if pair_score < 0: return "VERKAUFEN (Daten schwach)", "#ff4b4b", relevant_news
-    return "NEUTRAL (Warten)", "#ffa500", relevant_news
+    # Entscheidung
+    decision = "NEUTRAL"
+    color = "#b2b5be" # Grau
+    
+    if score >= 1:
+        decision = "KAUFEN"
+        color = "#00ff00" # Grün
+    elif score <= -1:
+        decision = "VERKAUFEN"
+        color = "#ff4b4b" # Rot
+        
+    return decision, color, relevant_news
 
-
-# --- 2. IP FINDER FÜR HANDY ---
+# --- 3. IP FÜR QR CODE ---
 try:
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.connect(("8.8.8.8", 80))
@@ -135,62 +153,12 @@ try:
 except: network_url = "http://localhost:8501"
 
 
-# --- 3. LAYOUT START ---
-st.title("📅 TradingView Calendar Priority")
+# --- 4. LAYOUT ---
+st.title("📅 TradingView & Forex Factory Master")
 
-# Daten laden
-cached_events = fetch_calendar_news()
+# Cache laden
+cached_data = fetch_calendar_data()
 
-# Oben: Die Signale (Das Ergebnis der Analyse)
-st.subheader("🤖 KI-Analyse der Kalender-Daten")
-pairs = [("EUR/USD", "EURUSD=X"), ("USD/JPY", "USDJPY=X"), ("GBP/USD", "GBPUSD=X"), ("XAU/USD", "GC=F"), ("US30", "^DJI")]
-
-cols = st.columns(len(pairs))
-for i, (name, ticker) in enumerate(pairs):
-    decision, color, news = analyze_pair_logic(name, cached_events)
-    with cols[i]:
-        st.markdown(f"**{name}**")
-        st.markdown(f"<div class='signal-box' style='background-color: {color};'>{decision}</div>", unsafe_allow_html=True)
-        
-        with st.expander("Quellen & Events"):
-            if news:
-                for n in news[:3]:
-                    impact_color = "red" if n["impact"] == "High" else "orange"
-                    st.markdown(f"<div style='border-left: 3px solid {impact_color}; padding-left:5px; font-size:0.8em;'>{n['title']}</div>", unsafe_allow_html=True)
-            else:
-                st.caption("Keine Abweichungen im Kalender.")
-
-st.divider()
-
-# Unten: Der TradingView Kalender (Das visuelle Herzstück)
-st.subheader("📊 Der Offizielle TradingView Wirtschaftskalender")
-st.caption("Nutze diese Tabelle, um die Signale oben zu bestätigen (Forecast vs. Actual).")
-
-# Das ist das originale Widget von TradingView - Priorität 1
-components.html("""
-<div class="tradingview-widget-container">
-  <div class="tradingview-widget-container__widget"></div>
-  <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-events.js" async>
-  {
-  "colorTheme": "dark",
-  "isTransparent": false,
-  "width": "100%",
-  "height": "800",
-  "locale": "de_DE",
-  "importanceFilter": "-1,0,1",
-  "currencyFilter": "USD,EUR,JPY,GBP,AUD,CAD,CHF,CNY"
-}
-  </script>
-</div>
-""", height=800)
-
-# Sidebar
-with st.sidebar:
-    st.header("📱 Handy Link")
-    st.image(f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={network_url}")
-    st.write("Scan mich!")
-
-st.markdown(f"<div class='last-update'>Quellen: TradingView Widget + Investing/ForexFactory Logic | Zeit: {datetime.datetime.now().strftime('%H:%M:%S')}</div>", unsafe_allow_html=True)
-
-time.sleep(60) # Auto-Refresh jede Minute
-st.rerun()
+# DIE KOMPLETTE LISTE (14 Paare)
+pairs = [
+    ("USD/JPY", "USDJPY=X"), ("CHF/JPY", "CHFJPY
