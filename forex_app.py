@@ -25,7 +25,7 @@ st.markdown("""
         margin-bottom: 10px;
     }
     
-    /* ICON CONTAINER (Die Kreise) */
+    /* ICON CONTAINER */
     .icon-container { position: relative; width: 80px; height: 50px; margin: 0 auto 5px; }
     .icon-1 { width: 40px; height: 40px; border-radius: 50%; position: absolute; left: 10px; top: 0; background-size: cover; z-index: 2; border: 2px solid #1e222d; }
     .icon-2 { width: 40px; height: 40px; border-radius: 50%; position: absolute; left: 35px; top: 10px; background-size: cover; z-index: 1; border: 2px solid #1e222d; }
@@ -62,28 +62,32 @@ st.markdown("""
     
     /* --- SCROLLBOX FÜR NEWS --- */
     .news-scroll-container {
-        max-height: 200px;       /* Maximale Höhe */
-        overflow-y: auto;        /* Scrollbar wenn nötig */
+        max-height: 250px;       /* Höhe der Box */
+        overflow-y: auto;        /* Scrollbar aktivieren */
         padding-right: 5px;
         margin-top: 5px;
-        background-color: #161a25;
-        padding: 5px;
+        background-color: #161a25; /* Dunklerer Hintergrund für Kontrast */
+        padding: 8px;
         border-radius: 4px;
+        border: 1px solid #2a2e39;
     }
     
-    /* Scrollbar Styling */
-    .news-scroll-container::-webkit-scrollbar { width: 6px; }
+    /* Scrollbar Styling (Chrome/Safari) */
+    .news-scroll-container::-webkit-scrollbar { width: 8px; }
     .news-scroll-container::-webkit-scrollbar-track { background: #161a25; }
-    .news-scroll-container::-webkit-scrollbar-thumb { background-color: #555; border-radius: 10px; }
+    .news-scroll-container::-webkit-scrollbar-thumb { background-color: #444; border-radius: 4px; }
+    .news-scroll-container::-webkit-scrollbar-thumb:hover { background-color: #666; }
 
-    /* News Listen Styles */
-    .ff-high { border-left: 3px solid #ff4b4b; padding-left: 6px; margin-bottom: 4px; font-size: 0.8em; line-height: 1.3; }
-    .ff-med { border-left: 3px solid #ffa500; padding-left: 6px; margin-bottom: 4px; font-size: 0.8em; line-height: 1.3; }
-    .ff-low { border-left: 3px solid #4caf50; padding-left: 6px; margin-bottom: 4px; font-size: 0.8em; line-height: 1.3; color: #aaa; }
+    /* News Items Styles */
+    .ff-high { border-left: 3px solid #ff4b4b; padding-left: 8px; margin-bottom: 8px; font-size: 0.85em; line-height: 1.3; }
+    .ff-med { border-left: 3px solid #ffa500; padding-left: 8px; margin-bottom: 8px; font-size: 0.85em; line-height: 1.3; }
+    .ff-low { border-left: 3px solid #4caf50; padding-left: 8px; margin-bottom: 8px; font-size: 0.85em; line-height: 1.3; color: #aaa; }
     
     .pair-name { color: #d1d4dc; font-weight: bold; font-size: 1.1em; text-align: center; margin-top: 5px; }
-    a { color: #2962ff !important; text-decoration: none; }
-    a:hover { text-decoration: underline; color: #5e8aff !important; }
+    
+    /* Link Styling */
+    a { color: #4da6ff !important; text-decoration: none; }
+    a:hover { text-decoration: underline; color: #80bfff !important; }
     
     .last-update { font-size: 0.7em; color: #787b86; text-align: center; margin-top: 30px; }
 </style>
@@ -285,7 +289,7 @@ for i in range(0, len(pairs), 4):
         if "US30" in name: b_url = get_icon_url("US30")
         
         with cols[j]:
-            # 1. ICONS & NAME (Jetzt wieder da!)
+            # 1. ICONS & NAME
             st.markdown(f"""
                 <div class="icon-container">
                     <div class="icon-1" style="background-image: url('{b_url}');"></div>
@@ -309,20 +313,22 @@ for i in range(0, len(pairs), 4):
                 ics_data = create_ics(f"{name}: {future_alert['title']}", f"Link: {future_alert['link']}")
                 st.download_button("📅 Termin speichern", ics_data, f"event_{name}.ics", "text/calendar", key=f"btn_{i}_{j}")
 
-            # 4. NEWS LISTE MIT SCROLLBAR
+            # 4. NEWS LISTE MIT SCROLLBAR (Hier war der Fehler!)
             with st.expander(f"News ({len(news)})"):
                 if news:
                     # Sortierung
                     news.sort(key=lambda x: (x["impact"] == "high", x["is_future"]), reverse=True)
                     
-                    # Hier bauen wir den HTML-String für die Scrollbox
+                    # --- HIER IST DIE KORREKTUR: Wir bauen NUR den HTML String ---
                     news_html = "<div class='news-scroll-container'>"
-                    for n in news: # KEIN Limit mehr (zeigen alle)
+                    for n in news:
                         icon = "🔮" if n["is_future"] else "🔥" if n["impact"] == "high" else "📄"
                         css = "ff-high" if n["impact"] == "high" else "ff-med"
+                        # Füge jedes Item zum String hinzu
                         news_html += f"<div class='{css}'>{icon} <a href='{n['link']}'>{n['title']}</a></div>"
                     news_html += "</div>"
                     
+                    # Gib den fertigen String EINMAL aus
                     st.markdown(news_html, unsafe_allow_html=True)
                 else:
                     st.caption("Keine News.")
