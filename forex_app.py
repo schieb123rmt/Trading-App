@@ -10,7 +10,7 @@ import streamlit.components.v1 as components
 # 1. Konfiguration
 st.set_page_config(page_title="Trading ATM Ultimate", layout="wide")
 
-# 2. CSS STYLING (Goldene Box + TradingView Dark Mode)
+# 2. CSS STYLING
 st.markdown("""
 <style>
     /* Globaler Dark Mode */
@@ -25,18 +25,23 @@ st.markdown("""
         margin-bottom: 10px;
     }
     
-    /* SIGNAL BOX (Kaufen/Verkaufen) */
+    /* ICON CONTAINER (Die Kreise) */
+    .icon-container { position: relative; width: 80px; height: 50px; margin: 0 auto 5px; }
+    .icon-1 { width: 40px; height: 40px; border-radius: 50%; position: absolute; left: 10px; top: 0; background-size: cover; z-index: 2; border: 2px solid #1e222d; }
+    .icon-2 { width: 40px; height: 40px; border-radius: 50%; position: absolute; left: 35px; top: 10px; background-size: cover; z-index: 1; border: 2px solid #1e222d; }
+    
+    /* SIGNAL BOX */
     .signal-box { 
         font-size: 1.1em; font-weight: 800; text-align: center; 
         padding: 8px; border-radius: 4px; margin-top: 5px; margin-bottom: 10px;
         color: #000; text-shadow: 0px 0px 1px rgba(255,255,255,0.5);
     }
     
-    /* --- DIE GOLDENE WARN-BOX (Dein Wunsch-Design) --- */
+    /* GOLDENE WARN-BOX */
     .future-warning {
-        border: 2px solid #ffd700;       /* Goldener Rand */
-        background-color: #332b00;       /* Dunkler Hintergrund */
-        color: #ffd700;                  /* Goldene Schrift */
+        border: 2px solid #ffd700;
+        background-color: #332b00;
+        color: #ffd700;
         padding: 10px; 
         border-radius: 6px; 
         font-size: 0.85em; 
@@ -55,12 +60,28 @@ st.markdown("""
         text-decoration: underline;
     }
     
-    /* News Listen Styles (Forex Factory Farben) */
-    .ff-high { border-left: 4px solid #ff4b4b; padding-left: 8px; margin-bottom: 6px; font-size: 0.85em; }
-    .ff-med { border-left: 4px solid #ffa500; padding-left: 8px; margin-bottom: 6px; font-size: 0.85em; }
-    .ff-low { border-left: 4px solid #4caf50; padding-left: 8px; margin-bottom: 6px; font-size: 0.85em; color: #aaa; }
+    /* --- SCROLLBOX FÜR NEWS --- */
+    .news-scroll-container {
+        max-height: 200px;       /* Maximale Höhe */
+        overflow-y: auto;        /* Scrollbar wenn nötig */
+        padding-right: 5px;
+        margin-top: 5px;
+        background-color: #161a25;
+        padding: 5px;
+        border-radius: 4px;
+    }
     
-    .pair-name { color: #d1d4dc; font-weight: bold; font-size: 1em; text-align: center; }
+    /* Scrollbar Styling */
+    .news-scroll-container::-webkit-scrollbar { width: 6px; }
+    .news-scroll-container::-webkit-scrollbar-track { background: #161a25; }
+    .news-scroll-container::-webkit-scrollbar-thumb { background-color: #555; border-radius: 10px; }
+
+    /* News Listen Styles */
+    .ff-high { border-left: 3px solid #ff4b4b; padding-left: 6px; margin-bottom: 4px; font-size: 0.8em; line-height: 1.3; }
+    .ff-med { border-left: 3px solid #ffa500; padding-left: 6px; margin-bottom: 4px; font-size: 0.8em; line-height: 1.3; }
+    .ff-low { border-left: 3px solid #4caf50; padding-left: 6px; margin-bottom: 4px; font-size: 0.8em; line-height: 1.3; color: #aaa; }
+    
+    .pair-name { color: #d1d4dc; font-weight: bold; font-size: 1.1em; text-align: center; margin-top: 5px; }
     a { color: #2962ff !important; text-decoration: none; }
     a:hover { text-decoration: underline; color: #5e8aff !important; }
     
@@ -68,18 +89,25 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# 3. HELPER: ERWEITERTE SUCHE (Synonyme)
+# 3. HELPER: ICONS
+def get_icon_url(c):
+    crypto = {"BTC": "https://cryptologos.cc/logos/bitcoin-btc-logo.png", "ADA": "https://cryptologos.cc/logos/cardano-ada-logo.png", "XAU": "https://cdn-icons-png.flaticon.com/512/272/272530.png"}
+    if c.upper() in crypto: return crypto[c.upper()]
+    m = {"USD":"us","JPY":"jp","EUR":"eu","GBP":"gb","CHF":"ch","CAD":"ca","AUD":"au","US30":"us"}
+    code = m.get(c.upper(), "un")
+    return f"https://flagcdn.com/w160/{code}.png"
+
+# 4. HELPER: SYNONYME
 def get_keywords_for_currency(symbol):
     symbol = symbol.upper()
     keywords = [symbol]
     
-    # Damit finden wir News, auch wenn das Währungskürzel nicht explizit genannt wird
     if symbol == "USD": keywords.extend(["dollar", "greenback", "fed ", "fomc", "powell", "treasury", "us economy"])
     if symbol == "EUR": keywords.extend(["euro", "ecb", "lagarde", "ez ", "german", "bundesbank"])
     if symbol == "GBP": keywords.extend(["pound", "sterling", "boe ", "bailey", "uk economy", "gilt"])
     if symbol == "JPY": keywords.extend(["yen", "boj ", "ueda", "japan"])
     if symbol == "CHF": keywords.extend(["franc", "snb ", "swiss"])
-    if symbol == "CAD": keywords.extend(["loonie", "boc ", "canada", "oil"]) # Öl wichtig für CAD
+    if symbol == "CAD": keywords.extend(["loonie", "boc ", "canada", "oil"])
     if symbol == "AUD": keywords.extend(["aussie", "rba ", "australia"])
     if symbol == "BTC": keywords.extend(["bitcoin", "crypto", "sec ", "etf"])
     if symbol == "XAU": keywords.extend(["gold", "bullion", "metal"])
@@ -87,9 +115,8 @@ def get_keywords_for_currency(symbol):
     
     return keywords
 
-# 4. HELPER: KALENDER EINTAG GENERIEREN
+# 5. HELPER: KALENDER EINTAG
 def create_ics(event_title, description):
-    # Setzt Termin auf Morgen 09:00
     tomorrow = datetime.datetime.now() + timedelta(days=1)
     start_time = tomorrow.replace(hour=9, minute=0, second=0).strftime('%Y%m%dT%H%M%S')
     end_time = tomorrow.replace(hour=10, minute=0, second=0).strftime('%Y%m%dT%H%M%S')
@@ -113,41 +140,35 @@ END:VEVENT
 END:VCALENDAR"""
     return ics_content
 
-# 5. DATEN LADEN (RSS FEEDS)
+# 6. DATEN LADEN
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_calendar_data():
     urls = [
-        "https://www.investing.com/rss/news_25.rss", # Wirtschaftskalender
-        "https://www.fxstreet.com/rss/news",         # Forex News
-        "https://cointelegraph.com/rss"              # Krypto
+        "https://www.investing.com/rss/news_25.rss",
+        "https://www.fxstreet.com/rss/news",
+        "https://cointelegraph.com/rss"
     ]
     
     events = []
-    
-    # Trigger-Wörter
     high_impact_keywords = ["cpi", "nfp", "gdp", "fomc", "rate decision", "interest rate", "inflation", "payroll"]
     future_keywords = ["preview", "outlook", "forecast", "tomorrow", "week ahead", "projection", "expects", "likely to"]
     
     for url in urls:
         try:
             f = feedparser.parse(url)
-            # Wir scannen 50 Artikel pro Feed für maximale Abdeckung
-            for e in f.entries[:50]:
+            for e in f.entries[:50]: # Viele News laden
                 title = e.title
                 link = e.link
                 lower = title.lower()
                 
-                # Impact Check
                 impact = "low"
                 for k in high_impact_keywords:
                     if k in lower: impact = "high"
                 
-                # Future Check (Ist es für morgen?)
                 is_future = False
                 for k in future_keywords:
                     if k in lower: is_future = True
                 
-                # Signal Check (Bullish/Bearish)
                 signal_score = 0
                 if "beat" in lower or "above" in lower or "stronger" in lower or "hike" in lower or "bullish" in lower:
                     signal_score = 1
@@ -165,19 +186,16 @@ def fetch_calendar_data():
         except: continue
     return events
 
-# 6. ANALYSE LOGIK PRO PAAR
+# 7. ANALYSE LOGIK
 def analyze_pair(name, events):
-    # Währungspaare aufsplitten
     parts = name.replace(' (Gold)', '').split('/')
     base_sym = parts[0]
     quote_sym = parts[1] if len(parts) > 1 else ""
     
-    # Spezialfälle
     if "XAU" in name: base_sym = "XAU"
     if "US30" in name: base_sym = "US30"
     if "BTC" in name: base_sym = "BTC"
     
-    # Synonyme laden
     base_keywords = get_keywords_for_currency(base_sym)
     quote_keywords = get_keywords_for_currency(quote_sym) if quote_sym else []
     
@@ -187,8 +205,6 @@ def analyze_pair(name, events):
     
     for e in events:
         is_relevant = False
-        
-        # Prüfung: Enthält die News eines der Keywords?
         for k in base_keywords:
             if k in e["raw"]: is_relevant = True
         for k in quote_keywords:
@@ -196,21 +212,17 @@ def analyze_pair(name, events):
         if "market" in e["raw"]: is_relevant = True
         
         if is_relevant:
-            # Score berechnen (nur aktuelle News zählen in das Signal)
             if not e["is_future"]:
                 score += e["score"]
             
-            # Die "Goldene Box" Logik: Wir suchen die wichtigste Zukunfts-News
             if e["is_future"]:
                 if future_warning is None:
                     future_warning = e
-                # Wenn wir schon eine haben, überschreiben wir sie nur, wenn die neue "High Impact" ist
                 elif e["impact"] == "high" and future_warning["impact"] != "high":
                     future_warning = e
                 
             relevant_news.append(e)
             
-    # Signal Text & Farbe
     decision = "NEUTRAL"
     color = "#b2b5be" # Grau
     
@@ -223,7 +235,7 @@ def analyze_pair(name, events):
         
     return decision, color, relevant_news, future_warning
 
-# 7. IP FÜR QR CODE FINDEN
+# 8. IP FINDEN
 try:
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.connect(("8.8.8.8", 80))
@@ -233,15 +245,13 @@ try:
 except: network_url = "http://localhost:8501"
 
 
-# --- 8. LAYOUT AUFBAU ---
+# --- 9. LAYOUT ---
 st.title("📅 Future Market Scanner")
-# Dynamisches Datum für Morgen anzeigen
 tomorrow_date = (datetime.datetime.now() + timedelta(days=1)).strftime('%d.%m.%Y')
 st.caption(f"Aktive Prognosen & Vorschau für Morgen ({tomorrow_date})")
 
 cached_data = fetch_calendar_data()
 
-# LISTE ALLER 14 PAARE
 pairs = [
     ("USD/JPY", "USDJPY=X"),
     ("CHF/JPY", "CHFJPY=X"),
@@ -259,20 +269,35 @@ pairs = [
     ("ADA/USDT", "ADA-USD")
 ]
 
-# Grid Layout (4 Spalten)
+# Grid Layout
 for i in range(0, len(pairs), 4):
     cols = st.columns(4)
     for j, (name, ticker) in enumerate(pairs[i:i+4]):
         decision, color, news, future_alert = analyze_pair(name, cached_data)
         
+        # Icons URLs vorbereiten
+        parts = name.replace(' (Gold)', '').split('/')
+        b_url = get_icon_url(parts[0])
+        q_url = get_icon_url(parts[1] if len(parts)>1 else "USD")
+        if "XAU" in name: b_url = get_icon_url("XAU")
+        if "BTC" in name: b_url = get_icon_url("BTC")
+        if "ADA" in name: b_url = get_icon_url("ADA")
+        if "US30" in name: b_url = get_icon_url("US30")
+        
         with cols[j]:
-            # 1. Name
-            st.markdown(f"<div class='pair-name'>{name}</div>", unsafe_allow_html=True)
+            # 1. ICONS & NAME (Jetzt wieder da!)
+            st.markdown(f"""
+                <div class="icon-container">
+                    <div class="icon-1" style="background-image: url('{b_url}');"></div>
+                    <div class="icon-2" style="background-image: url('{q_url}');"></div>
+                </div>
+                <div class='pair-name'>{name}</div>
+            """, unsafe_allow_html=True)
             
-            # 2. Signal Box (Kaufen/Verkaufen)
+            # 2. SIGNAL
             st.markdown(f"<div class='signal-box' style='background-color: {color};'>{decision}</div>", unsafe_allow_html=True)
             
-            # 3. DIE GOLDENE VORSCHAU BOX (Nur wenn Vorschau da ist)
+            # 3. GOLDENE BOX
             if future_alert:
                 st.markdown(f"""
                 <div class='future-warning'>
@@ -281,34 +306,31 @@ for i in range(0, len(pairs), 4):
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # 4. Kalender Button (In der goldenen Box Logik)
                 ics_data = create_ics(f"{name}: {future_alert['title']}", f"Link: {future_alert['link']}")
-                st.download_button(
-                    label="📅 Termin speichern",
-                    data=ics_data,
-                    file_name=f"event_{name}.ics",
-                    mime="text/calendar",
-                    key=f"btn_{i}_{j}",
-                    help="Erstellt einen Kalendereintrag für Morgen 09:00 Uhr"
-                )
+                st.download_button("📅 Termin speichern", ics_data, f"event_{name}.ics", "text/calendar", key=f"btn_{i}_{j}")
 
-            # 5. News Expander
+            # 4. NEWS LISTE MIT SCROLLBAR
             with st.expander(f"News ({len(news)})"):
                 if news:
-                    # Sortierung: Erst High Impact, dann Future
+                    # Sortierung
                     news.sort(key=lambda x: (x["impact"] == "high", x["is_future"]), reverse=True)
-                    for n in news[:5]:
-                        # Kleine Icons für die Liste
+                    
+                    # Hier bauen wir den HTML-String für die Scrollbox
+                    news_html = "<div class='news-scroll-container'>"
+                    for n in news: # KEIN Limit mehr (zeigen alle)
                         icon = "🔮" if n["is_future"] else "🔥" if n["impact"] == "high" else "📄"
                         css = "ff-high" if n["impact"] == "high" else "ff-med"
-                        st.markdown(f"<div class='{css}'>{icon} <a href='{n['link']}'>{n['title']}</a></div>", unsafe_allow_html=True)
+                        news_html += f"<div class='{css}'>{icon} <a href='{n['link']}'>{n['title']}</a></div>"
+                    news_html += "</div>"
+                    
+                    st.markdown(news_html, unsafe_allow_html=True)
                 else:
-                    st.caption("Keine Daten.")
+                    st.caption("Keine News.")
 
 st.divider()
 
 # UNTEN: TRADINGVIEW WIDGET
-st.subheader("📊 Offizieller Kalender (Kontrolle)")
+st.subheader("📊 Offizieller Kalender")
 components.html("""
 <div class="tradingview-widget-container">
   <div class="tradingview-widget-container__widget"></div>
@@ -318,12 +340,10 @@ components.html("""
 </div>
 """, height=600)
 
-# SIDEBAR: HANDY ZUGANG
 with st.sidebar:
     st.header("📱 Handy Link")
     st.image(f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={network_url}")
     st.write(f"`{network_url}`")
-    st.info("Scanner für heute & morgen.")
 
 st.markdown(f"<div class='last-update'>Live Logic | Auto-Refresh 5 Min | Zeit: {datetime.datetime.now().strftime('%H:%M:%S')}</div>", unsafe_allow_html=True)
 
